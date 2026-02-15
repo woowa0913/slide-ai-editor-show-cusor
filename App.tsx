@@ -31,11 +31,11 @@ const App: React.FC = () => {
   const [generationState, setGenerationState] = useState<GenerationState>({ isExporting: false, progress: 0, statusMessage: '' });
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(AspectRatio.Video16_9);
   const [includeSubtitles, setIncludeSubtitles] = useState<boolean>(true);
-  
+
   const [selectedVoice, setSelectedVoice] = useState<VoiceName>(VoiceName.Zephyr);
   const [scriptLevel, setScriptLevel] = useState<ScriptLevel>('new_hire');
   const [scriptLength, setScriptLength] = useState<ScriptLength>('medium');
-  
+
   // New State for Animation Selection
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
@@ -90,8 +90,25 @@ const App: React.FC = () => {
     setSlides(snapshot.slides);
     setActiveSlideId(snapshot.activeSlideId);
     setSelectedSlideIds(snapshot.selectedSlideIds);
-    isRestoringHistoryRef.current = false;
+    // isRestoringHistoryRef.current = false; // Moved to useEffect
   };
+
+  // Effect to reset restoring flag after state update
+  useEffect(() => {
+    if (isRestoringHistoryRef.current) {
+      // Use a timeout or simply check if slides matched the snapshot? 
+      // Better: just reset it on next cycle if it was true.
+      // Actually, since setState is batched, we might need a better way.
+      // But for undo/redo specifically, let's keep it simple: 
+      // We set it true, schedule state updates.
+      // The next render will have new state.
+      // So we can set it back to false in a useEffect that runs on every render or specific dependency.
+      const timer = setTimeout(() => {
+        isRestoringHistoryRef.current = false;
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  });
 
   const handleUndo = () => {
     if (historyPast.length === 0) return;
@@ -119,7 +136,7 @@ const App: React.FC = () => {
     if (!files || files.length === 0) return;
 
     setGenerationState({ isExporting: true, progress: 0, statusMessage: '파일 처리 중...' });
-    
+
     try {
       const newSlides: Slide[] = [];
       let convertPdfToImages: ((file: File) => Promise<string[]>) | null = null;
@@ -132,7 +149,7 @@ const App: React.FC = () => {
           const images = await convertPdfToImages(file);
           images.forEach((imgUrl) => {
             newSlides.push({
-              id: Math.random().toString(36).substr(2, 9),
+              id: crypto.randomUUID(),
               imageUrl: imgUrl,
               script: "",
               subtitle: "",
@@ -149,7 +166,7 @@ const App: React.FC = () => {
           });
           const imgUrl = await p;
           newSlides.push({
-            id: Math.random().toString(36).substr(2, 9),
+            id: crypto.randomUUID(),
             imageUrl: imgUrl,
             script: "",
             subtitle: "",
@@ -184,15 +201,20 @@ const App: React.FC = () => {
     pushHistory();
     setSlides(prev => {
       const filtered = prev.filter(s => s.id !== id);
-      if (activeSlideId === id) setActiveSlideId(filtered.length > 0 ? filtered[0].id : '');
+      // Logic moved out of setState callback
       return filtered;
     });
+    // Calculate next active slide based on current state (safe enough for next render)
+    if (activeSlideId === id) {
+      const remaining = slides.filter(s => s.id !== id);
+      setActiveSlideId(remaining.length > 0 ? remaining[0].id : '');
+    }
     setSelectedSlideIds(prev => prev.filter(sid => sid !== id));
   };
 
   const toggleSlideSelection = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setSelectedSlideIds(prev => 
+    setSelectedSlideIds(prev =>
       prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
     );
   };
@@ -258,7 +280,7 @@ const App: React.FC = () => {
     for (const id of targetIds) {
       const targetSlide = slidesRef.current.find(s => s.id === id);
       if (!targetSlide) continue;
-      
+
       try {
         const base64Data = targetSlide.imageUrl.split(',')[1] || targetSlide.imageUrl;
         const result = await generateSlideScript(base64Data, scriptLevel, scriptLength);
@@ -324,11 +346,11 @@ const App: React.FC = () => {
     try {
       const { exportVideo } = await loadVideoRenderer();
       const blob = await exportVideo(
-        slides, 
+        slides,
         aspectRatio === AspectRatio.Portrait9_16 ? 1080 : 1920,
         aspectRatio === AspectRatio.Portrait9_16 ? 1920 : 1080,
         aspectRatio,
-        subtitleStyle, 
+        subtitleStyle,
         (p, msg) => setGenerationState(prev => ({ ...prev, progress: p, statusMessage: msg })),
         includeSubtitles
       );
@@ -361,18 +383,18 @@ const App: React.FC = () => {
       <header className="h-20 border-b border-gray-800 bg-gray-900 flex items-center justify-between px-6 z-20 shadow-xl">
         <div className="flex items-center gap-5">
           <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0 border border-white/10 group">
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7 text-white group-hover:scale-105 transition-transform">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                <line x1="8" y1="21" x2="16" y2="21" />
-                <line x1="12" y1="17" x2="12" y2="21" />
-                <path d="M7 11 L11 9 L13 13 L17 8" strokeWidth="2" />
-             </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7 text-white group-hover:scale-105 transition-transform">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+              <path d="M7 11 L11 9 L13 13 L17 8" strokeWidth="2" />
+            </svg>
           </div>
           <div className="h-8 flex items-center justify-center">
             {!logoError ? (
-              <img 
-                src="https://drive.google.com/uc?export=view&id=1cg9YBFIuZtsnn_oekcN121ks_JnJPiX-" 
-                alt="kt cloud" 
+              <img
+                src="https://drive.google.com/uc?export=view&id=1cg9YBFIuZtsnn_oekcN121ks_JnJPiX-"
+                alt="kt cloud"
                 className="h-full object-contain brightness-0 invert opacity-95"
                 referrerPolicy="no-referrer"
                 onError={() => setLogoError(true)}
@@ -427,25 +449,25 @@ const App: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         <aside className="w-80 bg-gray-900 border-r border-gray-800 flex flex-col z-10 shadow-2xl">
           <div className="p-5 border-b border-gray-800 bg-gray-900/50">
-             <div className="flex justify-between items-center">
-               <h2 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em]">Slide Manager</h2>
-               <button onClick={handleSelectAll} className="text-[10px] font-bold text-brand-400 hover:text-brand-300 transition-colors">
-                 {selectedSlideIds.length === slides.length && slides.length > 0 ? 'DESELECT ALL' : 'SELECT ALL'}
-               </button>
-             </div>
+            <div className="flex justify-between items-center">
+              <h2 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em]">Slide Manager</h2>
+              <button onClick={handleSelectAll} className="text-[10px] font-bold text-brand-400 hover:text-brand-300 transition-colors">
+                {selectedSlideIds.length === slides.length && slides.length > 0 ? 'DESELECT ALL' : 'SELECT ALL'}
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
             {slides.map((slide, idx) => (
-              <SlideThumbnail 
-                key={slide.id} 
-                slide={slide} 
-                index={idx} 
-                isActive={slide.id === activeSlideId} 
+              <SlideThumbnail
+                key={slide.id}
+                slide={slide}
+                index={idx}
+                isActive={slide.id === activeSlideId}
                 isSelected={selectedSlideIds.includes(slide.id)}
                 isDragOver={dragOverSlideId === slide.id}
-                onClick={() => setActiveSlideId(slide.id)} 
+                onClick={() => setActiveSlideId(slide.id)}
                 onSelect={(e) => toggleSlideSelection(slide.id, e)}
-                onDelete={deleteSlide} 
+                onDelete={deleteSlide}
                 onDragStart={handleSlideDragStart}
                 onDragOver={handleSlideDragOver}
                 onDrop={handleSlideDrop}
@@ -461,27 +483,27 @@ const App: React.FC = () => {
         </aside>
 
         <main className="flex-1 flex flex-col min-w-0 bg-gray-950">
-          <PreviewArea 
-            activeSlide={activeSlide} 
-            aspectRatio={aspectRatio} 
-            subtitleStyle={subtitleStyle} 
-            onUpdateSubtitleStyle={setSubtitleStyle} 
+          <PreviewArea
+            activeSlide={activeSlide}
+            aspectRatio={aspectRatio}
+            subtitleStyle={subtitleStyle}
+            onUpdateSubtitleStyle={setSubtitleStyle}
             includeSubtitles={includeSubtitles}
             selectedElementId={selectedElementId}
             onSelectElement={setSelectedElementId}
             onUpdateSlide={(updates) => activeSlideId && updateSlide(activeSlideId, updates, { skipHistory: true })}
           />
-          <EditorPanel 
-            slide={activeSlide} 
+          <EditorPanel
+            slide={activeSlide}
             selectedSlideCount={selectedSlideIds.length}
-            onUpdate={updateSlide} 
-            onGenerateAudio={handleBulkGenerateAudio} 
-            onGenerateScript={handleBulkGenerateScript} 
-            subtitleStyle={subtitleStyle} 
-            onUpdateSubtitleStyle={setSubtitleStyle} 
-            selectedVoice={selectedVoice} 
-            onVoiceChange={setSelectedVoice} 
-            scriptLevel={scriptLevel} 
+            onUpdate={updateSlide}
+            onGenerateAudio={handleBulkGenerateAudio}
+            onGenerateScript={handleBulkGenerateScript}
+            subtitleStyle={subtitleStyle}
+            onUpdateSubtitleStyle={setSubtitleStyle}
+            selectedVoice={selectedVoice}
+            onVoiceChange={setSelectedVoice}
+            scriptLevel={scriptLevel}
             onScriptLevelChange={setScriptLevel}
             scriptLength={scriptLength}
             onScriptLengthChange={setScriptLength}
@@ -494,14 +516,14 @@ const App: React.FC = () => {
       {generationState.isExporting && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-2xl z-[10000] flex items-center justify-center p-8 transition-all animate-in fade-in duration-300">
           <div className="w-full max-w-md bg-gray-900 border border-white/10 rounded-[2.5rem] p-12 shadow-[0_0_80px_rgba(0,0,0,0.8)] ring-1 ring-white/10 text-center">
-             <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center">
               <div className="mb-10 relative">
-                 <div className="w-24 h-24 border-[8px] border-brand-500/10 border-t-brand-500 rounded-full animate-spin"></div>
-                 <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-12 h-12 bg-brand-500/20 rounded-full flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-brand-400 animate-pulse"><path d="M11.644 1.59a.75.75 0 01.712 0l9.75 5.25a.75.75 0 010 1.32l-9.75 5.25a.75.75 0 01-.712 0l-9.75-5.25a.75.75 0 010-1.32l9.75-5.25z" /><path d="M3.276 12.294a.75.75 0 000 1.32l9.75 5.25a.75.75 0 00.712 0l9.75-5.25a.75.75 0 000-1.32l-9.75 5.25a.75.75 0 01-.712 0l-9.75-5.25z" /><path d="M3.276 16.794a.75.75 0 000 1.32l9.75 5.25a.75.75 0 00.712 0l9.75-5.25a.75.75 0 000-1.32l-9.75 5.25a.75.75 0 01-.712 0l-9.75-5.25z" /></svg>
-                    </div>
-                 </div>
+                <div className="w-24 h-24 border-[8px] border-brand-500/10 border-t-brand-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-12 h-12 bg-brand-500/20 rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 text-brand-400 animate-pulse"><path d="M11.644 1.59a.75.75 0 01.712 0l9.75 5.25a.75.75 0 010 1.32l-9.75 5.25a.75.75 0 01-.712 0l-9.75-5.25a.75.75 0 010-1.32l9.75-5.25z" /><path d="M3.276 12.294a.75.75 0 000 1.32l9.75 5.25a.75.75 0 00.712 0l9.75-5.25a.75.75 0 000-1.32l-9.75 5.25a.75.75 0 01-.712 0l-9.75-5.25z" /><path d="M3.276 16.794a.75.75 0 000 1.32l9.75 5.25a.75.75 0 00.712 0l9.75-5.25a.75.75 0 000-1.32l-9.75 5.25a.75.75 0 01-.712 0l-9.75-5.25z" /></svg>
+                  </div>
+                </div>
               </div>
               <h3 className="text-3xl font-black mb-4 text-white tracking-tight">비디오 생성 중</h3>
               <div className="bg-white/5 border border-white/5 px-4 py-2 rounded-lg mb-10 h-10 flex items-center justify-center min-w-[300px]">

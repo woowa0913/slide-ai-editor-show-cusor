@@ -16,23 +16,23 @@ interface PreviewAreaProps {
 
 type InteractionMode = 'none' | 'drag' | 'resize-tl' | 'resize-tr' | 'resize-bl' | 'resize-br' | 'subtitle-drag';
 
-export const PreviewArea: React.FC<PreviewAreaProps> = ({ 
-  activeSlide, 
-  aspectRatio, 
-  subtitleStyle, 
-  onUpdateSubtitleStyle, 
+export const PreviewArea: React.FC<PreviewAreaProps> = ({
+  activeSlide,
+  aspectRatio,
+  subtitleStyle,
+  onUpdateSubtitleStyle,
   includeSubtitles,
   selectedElementId,
   onSelectElement,
   onUpdateSlide
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackProgress, setPlaybackProgress] = useState(0); 
-  const [naturalSize, setNaturalSize] = useState<{width: number, height: number} | null>(null);
+  const [playbackProgress, setPlaybackProgress] = useState(0);
+  const [naturalSize, setNaturalSize] = useState<{ width: number, height: number } | null>(null);
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('none');
   const [startDragPos, setStartDragPos] = useState({ x: 0, y: 0 });
   const [startElementRect, setStartElementRect] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
-  
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -79,7 +79,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
 
   const stopAudio = () => {
     if (sourceRef.current) {
-      try { sourceRef.current.stop(); } catch(e) {}
+      try { sourceRef.current.stop(); } catch (e) { }
       sourceRef.current.disconnect();
       sourceRef.current = null;
     }
@@ -103,30 +103,30 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
     const source = audioContextRef.current.createBufferSource();
     source.buffer = activeSlide.audioData;
     source.connect(audioContextRef.current.destination);
-    
+
     source.onended = () => {
-        setIsPlaying(false);
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-        pausedTimeRef.current = 0;
-        setPlaybackProgress(100);
+      setIsPlaying(false);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      pausedTimeRef.current = 0;
+      setPlaybackProgress(100);
     };
-    
+
     source.start(0, startOffset);
     startTimeRef.current = audioContextRef.current.currentTime - startOffset;
     sourceRef.current = source;
     setIsPlaying(true);
 
     const duration = activeSlide.audioData.duration;
-    
+
     const updateLoop = () => {
-        if (!audioContextRef.current) return;
-        const currentTime = audioContextRef.current.currentTime;
-        const elapsed = currentTime - startTimeRef.current;
-        const progress = Math.min(Math.max(elapsed / duration, 0), 1);
-        setPlaybackProgress(progress * 100);
-        if (elapsed < duration) {
-            animationFrameRef.current = requestAnimationFrame(updateLoop);
-        }
+      if (!audioContextRef.current) return;
+      const currentTime = audioContextRef.current.currentTime;
+      const elapsed = currentTime - startTimeRef.current;
+      const progress = Math.min(Math.max(elapsed / duration, 0), 1);
+      setPlaybackProgress(progress * 100);
+      if (elapsed < duration) {
+        animationFrameRef.current = requestAnimationFrame(updateLoop);
+      }
     };
     animationFrameRef.current = requestAnimationFrame(updateLoop);
   };
@@ -134,7 +134,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
   const handleTogglePlay = () => {
     if (isPlaying) {
       if (audioContextRef.current) {
-         pausedTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current;
+        pausedTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current;
       }
       stopAudio();
     } else {
@@ -170,7 +170,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
     if (!el) return;
 
     if (onSelectElement) onSelectElement(id);
-    
+
     setInteractionMode(mode);
     setStartDragPos(getEventPos(e.nativeEvent));
     setStartElementRect({ ...el.rect });
@@ -185,11 +185,11 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
 
   const handleGlobalMouseMove = (e: MouseEvent | TouchEvent) => {
     if (interactionMode === 'none' || !containerRef.current) return;
-    
+
     const currentPos = getEventPos(e);
     const dxPx = currentPos.x - startDragPos.x;
     const dyPx = currentPos.y - startDragPos.y;
-    
+
     const dx = (dxPx / containerSize.width) * 100;
     const dy = (dyPx / containerSize.height) * 100;
 
@@ -203,7 +203,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
     }
 
     if (!startElementRect || !selectedElementId || !activeSlide?.visualElements || !onUpdateSlide) return;
-    
+
     let newRect = { ...startElementRect };
 
     if (interactionMode === 'drag') {
@@ -227,7 +227,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
       newRect.h = Math.max(5, startElementRect.h - (newRect.y - startElementRect.y));
     }
 
-    const newElements = activeSlide.visualElements.map(el => 
+    const newElements = activeSlide.visualElements.map(el =>
       el.id === selectedElementId ? { ...el, rect: newRect } : el
     );
     onUpdateSlide({ visualElements: newElements });
@@ -255,62 +255,62 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
       window.removeEventListener('touchmove', handleGlobalMouseMove);
       window.removeEventListener('touchend', handleGlobalMouseUp);
     };
-  }, [interactionMode, startDragPos]);
+  }, [interactionMode, startDragPos, activeSlide, selectedElementId, subtitleStyle, containerSize]);
 
   const getAnimationStyles = (el: VisualElement) => {
-     const progress = playbackProgress / 100;
-     const isActive = progress >= el.startTime;
-     const relativeTime = Math.max(0, (progress - el.startTime) * (activeSlide?.audioData?.duration || 1));
-     const animProgress = Math.min(Math.max(relativeTime / el.duration, 0), 1);
+    const progress = playbackProgress / 100;
+    const isActive = progress >= el.startTime;
+    const relativeTime = Math.max(0, (progress - el.startTime) * (activeSlide?.audioData?.duration || 1));
+    const animProgress = Math.min(Math.max(relativeTime / el.duration, 0), 1);
 
-     const styles: React.CSSProperties = {
-         position: 'absolute',
-         left: `${el.rect.x}%`,
-         top: `${el.rect.y}%`,
-         width: `${el.rect.w}%`,
-         height: `${el.rect.h}%`,
-         zIndex: 10,
-         overflow: 'visible', 
-     };
+    const styles: React.CSSProperties = {
+      position: 'absolute',
+      left: `${el.rect.x}%`,
+      top: `${el.rect.y}%`,
+      width: `${el.rect.w}%`,
+      height: `${el.rect.h}%`,
+      zIndex: 10,
+      overflow: 'visible',
+    };
 
-     let filter = 'none';
-     let transform = 'none';
-     let opacity = 1;
-     let boxShadow = 'none';
+    let filter = 'none';
+    let transform = 'none';
+    let opacity = 1;
+    let boxShadow = 'none';
 
-     if (!isActive) {
-        if (el.animation === 'fadeIn' || el.animation === 'zoomIn' || el.animation === 'slideUp') {
-            opacity = 0;
-        }
-     } else {
-         if (el.animation === 'fadeIn') {
-             opacity = animProgress;
-         } else if (el.animation === 'zoomIn') {
-             const scale = 0.8 + (animProgress * 0.2); 
-             transform = `scale(${scale})`;
-             opacity = animProgress;
-         } else if (el.animation === 'slideUp') {
-             const translateY = (1 - animProgress) * 20; 
-             transform = `translateY(${translateY}px)`;
-             opacity = animProgress;
-         } else if (el.animation === 'highlight') {
-             const pulse = Math.sin(animProgress * Math.PI); 
-             filter = `brightness(${1 + pulse * 0.3}) contrast(1.1)`;
-             boxShadow = `0 0 ${20 * pulse}px rgba(255, 255, 0, ${0.5 * pulse})`;
-         }
-     }
+    if (!isActive) {
+      if (el.animation === 'fadeIn' || el.animation === 'zoomIn' || el.animation === 'slideUp') {
+        opacity = 0;
+      }
+    } else {
+      if (el.animation === 'fadeIn') {
+        opacity = animProgress;
+      } else if (el.animation === 'zoomIn') {
+        const scale = 0.8 + (animProgress * 0.2);
+        transform = `scale(${scale})`;
+        opacity = animProgress;
+      } else if (el.animation === 'slideUp') {
+        const translateY = (1 - animProgress) * 20;
+        transform = `translateY(${translateY}px)`;
+        opacity = animProgress;
+      } else if (el.animation === 'highlight') {
+        const pulse = Math.sin(animProgress * Math.PI);
+        filter = `brightness(${1 + pulse * 0.3}) contrast(1.1)`;
+        boxShadow = `0 0 ${20 * pulse}px rgba(255, 255, 0, ${0.5 * pulse})`;
+      }
+    }
 
-     return { container: styles, inner: { filter, transform, opacity, boxShadow, transition: isPlaying ? 'none' : 'all 0.3s ease' } };
+    return { container: styles, inner: { filter, transform, opacity, boxShadow, transition: isPlaying ? 'none' : 'all 0.3s ease' } };
   };
 
   // Rich text parser for Preview
   const renderRichText = (text: string) => {
     const parts = text.split(/(\*[^*]+\*)/g);
     return parts.map((part, i) => {
-       if (part.startsWith('*') && part.endsWith('*')) {
-         return <span key={i} style={{ color: subtitleStyle.highlightColor || 'yellow', fontSize: '1.2em' }}>{part.slice(1, -1)}</span>;
-       }
-       return part;
+      if (part.startsWith('*') && part.endsWith('*')) {
+        return <span key={i} style={{ color: subtitleStyle.highlightColor || 'yellow', fontSize: '1.2em' }}>{part.slice(1, -1)}</span>;
+      }
+      return part;
     });
   };
 
@@ -331,7 +331,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
   } else {
     containerStyle = { width: isPortrait ? 'auto' : '100%', height: isPortrait ? '95%' : 'auto', aspectRatio: isPortrait ? '9 / 16' : '16 / 9' };
   }
-  
+
   const hexToRgba = (hex: string, alpha: number) => {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -356,95 +356,95 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
   // Top: Image is bottom 80%, subtitle top 20%.
   // Bottom: Image is top 80%, subtitle bottom 20%.
   const imgAreaStyle: React.CSSProperties = (isTopLayout || isBottomLayout) ? {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      top: isTopLayout ? '20%' : 0,
-      height: '80%',
-      width: '100%'
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: isTopLayout ? '20%' : 0,
+    height: '80%',
+    width: '100%'
   } : { width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 };
 
   return (
     <div className="flex-1 bg-gray-950 p-8 flex flex-col items-center justify-center relative overflow-hidden" onClick={() => onSelectElement && onSelectElement(null)}>
-      <div 
+      <div
         ref={containerRef}
         className={`relative bg-black shadow-2xl rounded-lg overflow-hidden border border-gray-800 transition-all duration-300 group`}
-        style={{...containerStyle, maxWidth: '100%', maxHeight: '100%'}}
+        style={{ ...containerStyle, maxWidth: '100%', maxHeight: '100%' }}
       >
         {/* Image Area Wrapper */}
         <div style={imgAreaStyle} className="relative overflow-hidden">
-             <img src={activeSlide.imageUrl} alt="Base" className="w-full h-full object-contain" />
-             
-             {/* Visual Elements Layer (Inside Image Area) */}
-             {activeSlide.visualElements?.map((el) => {
-                 const { container, inner } = getAnimationStyles(el);
-                 const isSelected = selectedElementId === el.id;
-                 return (
-                   <div 
-                     key={el.id} 
-                     style={container}
-                     onMouseDown={(e) => handleElementMouseDown(e, el.id, 'drag')}
-                     className={`group/el ${isSelected ? 'z-20' : 'z-10'}`}
-                   >
-                       <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', borderRadius: '4px', ...inner }}>
-                          <div style={{
-                             width: `${100 / (el.rect.w / 100)}%`, 
-                             height: `${100 / (el.rect.h / 100)}%`,
-                             position: 'absolute',
-                             left: `${-el.rect.x / (el.rect.w / 100) * 100}%`,
-                             top: `${-el.rect.y / (el.rect.h / 100) * 100}%`,
-                         }}>
-                             <img src={activeSlide.imageUrl} className="w-full h-full object-contain" alt="" />
-                         </div>
-                       </div>
-                       {isSelected && (
-                        <>
-                          <div className="absolute inset-0 border-2 border-brand-500 pointer-events-none"></div>
-                          <button
-                            type="button"
-                            className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
-                            onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-tl')}
-                            onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-tl')}
-                          />
-                          <button
-                            type="button"
-                            className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
-                            onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-tr')}
-                            onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-tr')}
-                          />
-                          <button
-                            type="button"
-                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
-                            onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-bl')}
-                            onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-bl')}
-                          />
-                          <button
-                            type="button"
-                            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
-                            onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-br')}
-                            onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-br')}
-                          />
-                        </>
-                       )}
-                   </div>
-                 );
-             })}
+          <img src={activeSlide.imageUrl} alt="Base" className="w-full h-full object-contain" />
+
+          {/* Visual Elements Layer (Inside Image Area) */}
+          {activeSlide.visualElements?.map((el) => {
+            const { container, inner } = getAnimationStyles(el);
+            const isSelected = selectedElementId === el.id;
+            return (
+              <div
+                key={el.id}
+                style={container}
+                onMouseDown={(e) => handleElementMouseDown(e, el.id, 'drag')}
+                className={`group/el ${isSelected ? 'z-20' : 'z-10'}`}
+              >
+                <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', borderRadius: '4px', ...inner }}>
+                  <div style={{
+                    width: `${100 / (el.rect.w / 100)}%`,
+                    height: `${100 / (el.rect.h / 100)}%`,
+                    position: 'absolute',
+                    left: `${-el.rect.x / (el.rect.w / 100) * 100}%`,
+                    top: `${-el.rect.y / (el.rect.h / 100) * 100}%`,
+                  }}>
+                    <img src={activeSlide.imageUrl} className="w-full h-full object-contain" alt="" />
+                  </div>
+                </div>
+                {isSelected && (
+                  <>
+                    <div className="absolute inset-0 border-2 border-brand-500 pointer-events-none"></div>
+                    <button
+                      type="button"
+                      className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
+                      onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-tl')}
+                      onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-tl')}
+                    />
+                    <button
+                      type="button"
+                      className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
+                      onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-tr')}
+                      onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-tr')}
+                    />
+                    <button
+                      type="button"
+                      className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
+                      onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-bl')}
+                      onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-bl')}
+                    />
+                    <button
+                      type="button"
+                      className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
+                      onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-br')}
+                      onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-br')}
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Subtitles - Positioned globally on canvas */}
         {includeSubtitles && displaySubtitle && (
-          <div 
+          <div
             className={`absolute left-0 right-0 text-center px-4 transition-all duration-75 z-20 cursor-ns-resize hover:bg-white/5`}
-            style={{ 
-                top: (isTopLayout && interactionMode === 'none') ? '10%' : (isBottomLayout && interactionMode === 'none') ? '90%' : `${subtitleStyle.verticalPosition}%`, 
-                transform: 'translateY(-50%)' 
+            style={{
+              top: (isTopLayout && interactionMode === 'none') ? '10%' : (isBottomLayout && interactionMode === 'none') ? '90%' : `${subtitleStyle.verticalPosition}%`,
+              transform: 'translateY(-50%)'
             }}
             onMouseDown={handleSubtitleMouseDown}
           >
-             <span 
+            <span
               className="inline-block rounded-lg shadow-lg select-none pointer-events-none"
-              style={{ 
-                fontSize: `${scaledFontSize}px`, 
+              style={{
+                fontSize: `${scaledFontSize}px`,
                 fontWeight: 'bold',
                 fontFamily: subtitleStyle.fontFamily,
                 color: subtitleStyle.color,
@@ -452,17 +452,17 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
                 padding: `${scaledFontSize * 0.25}px ${scaledFontSize * 0.5}px`
               }}
             >
-               {renderRichText(displaySubtitle)}
-             </span>
+              {renderRichText(displaySubtitle)}
+            </span>
           </div>
         )}
 
         {/* Play Overlay & Controls */}
         {!isPlaying && activeSlide.audioData && (
           <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-             <div className="bg-black/30 p-4 rounded-full backdrop-blur-sm pointer-events-auto cursor-pointer hover:bg-black/50 transition-all" onClick={handleTogglePlay}>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-white opacity-90"><path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" /></svg>
-             </div>
+            <div className="bg-black/30 p-4 rounded-full backdrop-blur-sm pointer-events-auto cursor-pointer hover:bg-black/50 transition-all" onClick={handleTogglePlay}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-12 h-12 text-white opacity-90"><path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" /></svg>
+            </div>
           </div>
         )}
         {activeSlide.audioData && (

@@ -19,6 +19,8 @@ View your app in AI Studio: https://ai.studio/apps/drive/1wgkcQ8co7TOpH4KcdkxrG4
    (the app also accepts `API_KEY` for backward compatibility)
 3. Run the app:
    `npm run dev`
+4. For API routes (`/api/gemini`) in local development, use:
+   `vercel dev`
 
 ## Deploy to Vercel
 

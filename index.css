@@ -1,6 +1,11 @@
-html, body, #root {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 기존 스타일 유지 (현재 특별한 기존 스타일이 없으므로 지시어만 추가해도 무방하지만, 혹시 몰라 유지) */
+body { font-family: 'Inter', sans-serif; background-color: #0d1117; color: white; }
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #1a202c; }
+::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #718096; }

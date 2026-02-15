@@ -1,8 +1,8 @@
 // Utility to split text into chunks based on newlines as requested by the user.
 // This allows manual control over subtitle timing via line breaks in the script.
-export const splitTextIntoChunks = (text: string, maxChars: number = 45): string[] => {
+export const splitTextIntoChunks = (text: string): string[] => {
   if (!text) return [];
-  
+
   // Split strictly by newlines to respect user formatting
   // Filter out empty lines to avoid blank subtitles causing sync gaps
   return text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
@@ -18,10 +18,10 @@ export const getChunkIndexByCharacterCount = (chunks: string[], progress: number
 
   // Calculate total characters (weight)
   const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-  
+
   // Find target character position
   const targetCharIndex = progress * totalLength;
-  
+
   let runningCount = 0;
   for (let i = 0; i < chunks.length; i++) {
     runningCount += chunks[i].length;
@@ -31,6 +31,6 @@ export const getChunkIndexByCharacterCount = (chunks: string[], progress: number
       return i;
     }
   }
-  
+
   return chunks.length - 1;
 };

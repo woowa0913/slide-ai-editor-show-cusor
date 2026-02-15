@@ -18,6 +18,13 @@ interface VercelResponseLike {
   end: (body?: string) => void;
 }
 
+interface NormalizedError {
+  status: number;
+  code: string;
+  message: string;
+  retryAfterSec?: number;
+}
+
 const cleanJsonResponse = (text: string): string => text.replace(/```json\s?|```/g, '').trim();
 
 const getApiKey = (): string => {
@@ -29,6 +36,61 @@ const getApiKey = (): string => {
 const parseBody = <T,>(body: unknown): T => {
   if (typeof body === 'string') return JSON.parse(body) as T;
   return (body ?? {}) as T;
+};
+
+const extractRetryAfterSec = (raw: string): number | undefined => {
+  const msMatch = raw.match(/retry in\s+([\d.]+)ms/i);
+  if (msMatch?.[1]) return Math.max(1, Math.ceil(Number(msMatch[1]) / 1000));
+
+  const secMatch = raw.match(/"retryDelay":"(\d+)s"/i);
+  if (secMatch?.[1]) return Number(secMatch[1]);
+
+  return undefined;
+};
+
+const normalizeError = (error: unknown): NormalizedError => {
+  let rawMessage = error instanceof Error ? error.message : String(error);
+  let status = 500;
+  let code = 'INTERNAL_ERROR';
+  let message = '서버 처리 중 오류가 발생했습니다.';
+  let retryAfterSec: number | undefined;
+
+  try {
+    const parsed = JSON.parse(rawMessage) as {
+      error?: {
+        code?: number;
+        status?: string;
+        message?: string;
+      };
+    };
+    if (parsed.error?.code) status = parsed.error.code;
+    if (parsed.error?.status) code = parsed.error.status;
+    if (parsed.error?.message) rawMessage = parsed.error.message;
+  } catch {
+    // rawMessage is not JSON; use string-based matching below.
+  }
+
+  const isQuotaError =
+    rawMessage.includes('RESOURCE_EXHAUSTED') ||
+    rawMessage.includes('"code":429') ||
+    rawMessage.includes('code: 429') ||
+    rawMessage.includes('quota');
+
+  if (isQuotaError) {
+    status = 429;
+    code = 'QUOTA_EXCEEDED';
+    retryAfterSec = extractRetryAfterSec(rawMessage) ?? 60;
+    message = `Gemini 음성 생성 요청 한도를 초과했습니다. 약 ${retryAfterSec}초 후 다시 시도해 주세요.`;
+    return { status, code, message, retryAfterSec };
+  }
+
+  if (status === 401 || status === 403 || rawMessage.includes('API key')) {
+    code = 'AUTH_ERROR';
+    message = 'Gemini API 키를 확인해 주세요.';
+    return { status: status === 500 ? 401 : status, code, message };
+  }
+
+  return { status, code, message };
 };
 
 const getAudiencePrompt = (level: ScriptLevel): string => {
@@ -223,7 +285,11 @@ export default async function handler(req: VercelRequestLike, res: VercelRespons
 
     res.status(400).json({ error: 'Unknown action' });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown server error';
-    res.status(500).json({ error: message });
+    const normalized = normalizeError(error);
+    res.status(normalized.status).json({
+      error: normalized.message,
+      code: normalized.code,
+      retryAfterSec: normalized.retryAfterSec
+    });
   }
 }

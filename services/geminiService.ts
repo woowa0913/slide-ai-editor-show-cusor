@@ -11,11 +11,19 @@ const postGemini = async <TResponse, TPayload>(action: GeminiAction, payload: TP
   });
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
+    let code: string | undefined;
+    let retryAfterSec: number | undefined;
     try {
-      const json = await response.json() as { error?: string };
+      const json = await response.json() as { error?: string; code?: string; retryAfterSec?: number };
       if (json.error) message = json.error;
+      code = json.code;
+      retryAfterSec = json.retryAfterSec;
     } catch {
       // ignore parse errors; fallback to status-based message
+    }
+    if (code) {
+      const retryText = retryAfterSec ? ` (약 ${retryAfterSec}초 후 재시도)` : '';
+      message = `[${code}] ${message}${retryText}`;
     }
     throw new Error(message);
   }

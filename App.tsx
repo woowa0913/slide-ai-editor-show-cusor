@@ -187,6 +187,7 @@ const App: React.FC = () => {
 
     const { generateSpeech } = await loadGeminiService();
     let firstErrorMessage: string | null = null;
+    let isQuotaExceeded = false;
     for (const targetSlide of eligibleSlides) {
       const id = targetSlide.id;
 
@@ -203,7 +204,11 @@ const App: React.FC = () => {
         if (!firstErrorMessage) {
           firstErrorMessage = err instanceof Error ? err.message : "Unknown error";
         }
+        if (firstErrorMessage.includes('[QUOTA_EXCEEDED]')) {
+          isQuotaExceeded = true;
+        }
         updateSlide(id, { isGeneratingAudio: false });
+        if (isQuotaExceeded) break;
       }
     }
 

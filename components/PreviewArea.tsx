@@ -27,7 +27,6 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
   onUpdateSlide
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [dynamicSubtitle, setDynamicSubtitle] = useState("");
   const [playbackProgress, setPlaybackProgress] = useState(0); 
   const [naturalSize, setNaturalSize] = useState<{width: number, height: number} | null>(null);
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('none');
@@ -77,21 +76,6 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
     pausedTimeRef.current = 0;
     setPlaybackProgress(0);
   }, [activeSlide?.id]);
-
-  useEffect(() => {
-    if (!activeSlide) return;
-    const script = activeSlide.script || "";
-    const chunks = splitTextIntoChunks(script);
-    let textToShow = "";
-    if (chunks.length > 0) {
-      const progress = playbackProgress / 100; 
-      const chunkIndex = getChunkIndexByCharacterCount(chunks, progress);
-      textToShow = chunks[chunkIndex] || "";
-    } else {
-      textToShow = activeSlide.subtitle || "";
-    }
-    setDynamicSubtitle(textToShow);
-  }, [activeSlide?.script, activeSlide?.subtitle, playbackProgress]);
 
   const stopAudio = () => {
     if (sourceRef.current) {
@@ -200,7 +184,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
   };
 
   const handleGlobalMouseMove = (e: MouseEvent | TouchEvent) => {
-    if (interactionMode === 'none' || !containerRef.current || !startElementRect) return;
+    if (interactionMode === 'none' || !containerRef.current) return;
     
     const currentPos = getEventPos(e);
     const dxPx = currentPos.x - startDragPos.x;
@@ -218,7 +202,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
       return;
     }
 
-    if (!selectedElementId || !activeSlide?.visualElements || !onUpdateSlide) return;
+    if (!startElementRect || !selectedElementId || !activeSlide?.visualElements || !onUpdateSlide) return;
     
     let newRect = { ...startElementRect };
 
@@ -228,7 +212,20 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
     } else if (interactionMode === 'resize-br') {
       newRect.w = Math.max(5, Math.min(100 - newRect.x, startElementRect.w + dx));
       newRect.h = Math.max(5, Math.min(100 - newRect.y, startElementRect.h + dy));
-    } // ... other resize modes (omitted for brevity, logic follows previous change)
+    } else if (interactionMode === 'resize-tr') {
+      newRect.y = Math.max(0, Math.min(startElementRect.y + startElementRect.h - 5, startElementRect.y + dy));
+      newRect.w = Math.max(5, Math.min(100 - newRect.x, startElementRect.w + dx));
+      newRect.h = Math.max(5, startElementRect.h - (newRect.y - startElementRect.y));
+    } else if (interactionMode === 'resize-bl') {
+      newRect.x = Math.max(0, Math.min(startElementRect.x + startElementRect.w - 5, startElementRect.x + dx));
+      newRect.w = Math.max(5, startElementRect.w - (newRect.x - startElementRect.x));
+      newRect.h = Math.max(5, Math.min(100 - newRect.y, startElementRect.h + dy));
+    } else if (interactionMode === 'resize-tl') {
+      newRect.x = Math.max(0, Math.min(startElementRect.x + startElementRect.w - 5, startElementRect.x + dx));
+      newRect.y = Math.max(0, Math.min(startElementRect.y + startElementRect.h - 5, startElementRect.y + dy));
+      newRect.w = Math.max(5, startElementRect.w - (newRect.x - startElementRect.x));
+      newRect.h = Math.max(5, startElementRect.h - (newRect.y - startElementRect.y));
+    }
 
     const newElements = activeSlide.visualElements.map(el => 
       el.id === selectedElementId ? { ...el, rect: newRect } : el
@@ -345,6 +342,15 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
   const minDim = Math.min(containerSize.width, containerSize.height);
   const scale = (minDim / 720) * 0.95;
   const scaledFontSize = subtitleStyle.fontSize * scale;
+  const hasAudio = Boolean(activeSlide.audioData);
+  const scriptChunks = splitTextIntoChunks(activeSlide.script || "");
+  const subtitleFromScript = scriptChunks.length > 0
+    ? scriptChunks[getChunkIndexByCharacterCount(scriptChunks, playbackProgress / 100)] || scriptChunks[0]
+    : "";
+  const subtitleFromSaved = activeSlide.subtitle || "";
+  const displaySubtitle = hasAudio
+    ? (subtitleFromScript || subtitleFromSaved)
+    : (subtitleFromSaved || subtitleFromScript);
 
   // For Top/Bottom Layouts, we define the "Image Area" vs "Canvas Area"
   // Top: Image is bottom 80%, subtitle top 20%.
@@ -392,7 +398,33 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
                          </div>
                        </div>
                        {isSelected && (
-                         <div className="absolute inset-0 border-2 border-brand-500 pointer-events-none"></div>
+                        <>
+                          <div className="absolute inset-0 border-2 border-brand-500 pointer-events-none"></div>
+                          <button
+                            type="button"
+                            className="absolute -top-1.5 -left-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
+                            onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-tl')}
+                            onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-tl')}
+                          />
+                          <button
+                            type="button"
+                            className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
+                            onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-tr')}
+                            onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-tr')}
+                          />
+                          <button
+                            type="button"
+                            className="absolute -bottom-1.5 -left-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
+                            onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-bl')}
+                            onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-bl')}
+                          />
+                          <button
+                            type="button"
+                            className="absolute -bottom-1.5 -right-1.5 w-3 h-3 rounded-full bg-brand-400 border border-white"
+                            onMouseDown={(e) => handleElementMouseDown(e, el.id, 'resize-br')}
+                            onTouchStart={(e) => handleElementMouseDown(e, el.id, 'resize-br')}
+                          />
+                        </>
                        )}
                    </div>
                  );
@@ -400,11 +432,11 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
         </div>
 
         {/* Subtitles - Positioned globally on canvas */}
-        {includeSubtitles && dynamicSubtitle && (
+        {includeSubtitles && displaySubtitle && (
           <div 
             className={`absolute left-0 right-0 text-center px-4 transition-all duration-75 z-20 cursor-ns-resize hover:bg-white/5`}
             style={{ 
-                top: (isTopLayout && !interactionMode) ? '10%' : (isBottomLayout && !interactionMode) ? '90%' : `${subtitleStyle.verticalPosition}%`, 
+                top: (isTopLayout && interactionMode === 'none') ? '10%' : (isBottomLayout && interactionMode === 'none') ? '90%' : `${subtitleStyle.verticalPosition}%`, 
                 transform: 'translateY(-50%)' 
             }}
             onMouseDown={handleSubtitleMouseDown}
@@ -420,7 +452,7 @@ export const PreviewArea: React.FC<PreviewAreaProps> = ({
                 padding: `${scaledFontSize * 0.25}px ${scaledFontSize * 0.5}px`
               }}
             >
-               {renderRichText(dynamicSubtitle)}
+               {renderRichText(displaySubtitle)}
              </span>
           </div>
         )}

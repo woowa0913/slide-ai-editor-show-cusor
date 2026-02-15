@@ -12,6 +12,12 @@ const loadPdfUtils = () => import('./services/pdfUtils');
 const loadVideoRenderer = () => import('./services/videoRenderer');
 const loadPptxService = () => import('./services/pptxService');
 
+interface AppSnapshot {
+  slides: Slide[];
+  activeSlideId: string;
+  selectedSlideIds: string[];
+}
+
 const App: React.FC = () => {
   const [slides, setSlides] = useState<Slide[]>(SAMPLE_SLIDES);
   const slidesRef = useRef<Slide[]>(SAMPLE_SLIDES);
@@ -44,6 +50,11 @@ const App: React.FC = () => {
   });
 
   const [logoError, setLogoError] = useState(false);
+  const [historyPast, setHistoryPast] = useState<AppSnapshot[]>([]);
+  const [historyFuture, setHistoryFuture] = useState<AppSnapshot[]>([]);
+  const [draggingSlideId, setDraggingSlideId] = useState<string | null>(null);
+  const [dragOverSlideId, setDragOverSlideId] = useState<string | null>(null);
+  const isRestoringHistoryRef = useRef(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -55,6 +66,48 @@ const App: React.FC = () => {
   };
 
   const activeSlide = useMemo(() => slides.find(s => s.id === activeSlideId), [slides, activeSlideId]);
+
+  const cloneSlides = (source: Slide[]): Slide[] =>
+    source.map((slide) => ({
+      ...slide,
+      visualElements: slide.visualElements.map((el) => ({ ...el, rect: { ...el.rect } }))
+    }));
+
+  const createSnapshot = (): AppSnapshot => ({
+    slides: cloneSlides(slidesRef.current),
+    activeSlideId,
+    selectedSlideIds: [...selectedSlideIds]
+  });
+
+  const pushHistory = () => {
+    if (isRestoringHistoryRef.current) return;
+    setHistoryPast((prev) => [...prev.slice(-29), createSnapshot()]);
+    setHistoryFuture([]);
+  };
+
+  const restoreSnapshot = (snapshot: AppSnapshot) => {
+    isRestoringHistoryRef.current = true;
+    setSlides(snapshot.slides);
+    setActiveSlideId(snapshot.activeSlideId);
+    setSelectedSlideIds(snapshot.selectedSlideIds);
+    isRestoringHistoryRef.current = false;
+  };
+
+  const handleUndo = () => {
+    if (historyPast.length === 0) return;
+    const previous = historyPast[historyPast.length - 1];
+    setHistoryPast((prev) => prev.slice(0, -1));
+    setHistoryFuture((prev) => [createSnapshot(), ...prev.slice(0, 29)]);
+    restoreSnapshot(previous);
+  };
+
+  const handleRedo = () => {
+    if (historyFuture.length === 0) return;
+    const next = historyFuture[0];
+    setHistoryFuture((prev) => prev.slice(1));
+    setHistoryPast((prev) => [...prev.slice(-29), createSnapshot()]);
+    restoreSnapshot(next);
+  };
 
   // Reset selected element when slide changes
   useEffect(() => {
@@ -107,6 +160,7 @@ const App: React.FC = () => {
         }
       }
 
+      if (newSlides.length > 0) pushHistory();
       setSlides(prev => {
         const updated = [...prev, ...newSlides];
         if (prev.length === 0 && newSlides.length > 0) setActiveSlideId(newSlides[0].id);
@@ -121,11 +175,13 @@ const App: React.FC = () => {
     }
   };
 
-  const updateSlide = (id: string, updates: Partial<Slide>) => {
+  const updateSlide = (id: string, updates: Partial<Slide>, options?: { skipHistory?: boolean }) => {
+    if (!options?.skipHistory) pushHistory();
     setSlides(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
   const deleteSlide = (id: string) => {
+    pushHistory();
     setSlides(prev => {
       const filtered = prev.filter(s => s.id !== id);
       if (activeSlideId === id) setActiveSlideId(filtered.length > 0 ? filtered[0].id : '');
@@ -149,12 +205,53 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSlideDragStart = (id: string) => {
+    setDraggingSlideId(id);
+  };
+
+  const handleSlideDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (dragOverSlideId !== id) setDragOverSlideId(id);
+  };
+
+  const handleSlideDrop = (targetId: string) => {
+    if (!draggingSlideId || draggingSlideId === targetId) {
+      setDraggingSlideId(null);
+      setDragOverSlideId(null);
+      return;
+    }
+
+    const from = slidesRef.current.findIndex((s) => s.id === draggingSlideId);
+    const to = slidesRef.current.findIndex((s) => s.id === targetId);
+    if (from < 0 || to < 0 || from === to) {
+      setDraggingSlideId(null);
+      setDragOverSlideId(null);
+      return;
+    }
+
+    pushHistory();
+    setSlides((prev) => {
+      const reordered = [...prev];
+      const [moved] = reordered.splice(from, 1);
+      reordered.splice(to, 0, moved);
+      return reordered;
+    });
+    setDraggingSlideId(null);
+    setDragOverSlideId(null);
+  };
+
+  const handleSlideDragEnd = () => {
+    setDraggingSlideId(null);
+    setDragOverSlideId(null);
+  };
+
   // Bulk Script Generation
   const handleBulkGenerateScript = async () => {
     const targetIds = selectedSlideIds.length > 0 ? selectedSlideIds : (activeSlideId ? [activeSlideId] : []);
     if (targetIds.length === 0) return;
 
     // Show processing state visually in slides
+    pushHistory();
     setSlides(prev => prev.map(s => targetIds.includes(s.id) ? { ...s, script: "AI 분석 중..." } : s));
     const { generateSlideScript } = await loadGeminiService();
 
@@ -165,9 +262,9 @@ const App: React.FC = () => {
       try {
         const base64Data = targetSlide.imageUrl.split(',')[1] || targetSlide.imageUrl;
         const result = await generateSlideScript(base64Data, scriptLevel, scriptLength);
-        updateSlide(id, { script: result.script, subtitle: result.subtitle });
+        updateSlide(id, { script: result.script, subtitle: result.subtitle }, { skipHistory: true });
       } catch (err) {
-        updateSlide(id, { script: "오류: 분석에 실패했습니다." });
+        updateSlide(id, { script: "오류: 분석에 실패했습니다." }, { skipHistory: true });
       }
     }
   };
@@ -186,6 +283,7 @@ const App: React.FC = () => {
     }
 
     const { generateSpeech } = await loadGeminiService();
+    pushHistory();
     let firstErrorMessage: string | null = null;
     let isQuotaExceeded = false;
     for (const targetSlide of eligibleSlides) {
@@ -196,7 +294,7 @@ const App: React.FC = () => {
         const base64Audio = await generateSpeech(targetSlide.script, selectedVoice);
         if (base64Audio) {
           const buffer = await decodeAudioData(base64ToBytes(base64Audio), getAudioContext());
-          updateSlide(id, { audioData: buffer, isGeneratingAudio: false });
+          updateSlide(id, { audioData: buffer, isGeneratingAudio: false }, { skipHistory: true });
         } else {
           throw new Error("No audio");
         }
@@ -207,7 +305,7 @@ const App: React.FC = () => {
         if (firstErrorMessage.includes('[QUOTA_EXCEEDED]')) {
           isQuotaExceeded = true;
         }
-        updateSlide(id, { isGeneratingAudio: false });
+        updateSlide(id, { isGeneratingAudio: false }, { skipHistory: true });
         if (isQuotaExceeded) break;
       }
     }
@@ -309,6 +407,23 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      <div className="h-12 border-b border-gray-800 bg-gray-900/70 px-6 flex items-center gap-2">
+        <button
+          onClick={handleUndo}
+          disabled={historyPast.length === 0}
+          className="px-3 py-1.5 text-xs font-bold rounded-md border border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          이전
+        </button>
+        <button
+          onClick={handleRedo}
+          disabled={historyFuture.length === 0}
+          className="px-3 py-1.5 text-xs font-bold rounded-md border border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          되돌리기
+        </button>
+      </div>
+
       <div className="flex-1 flex overflow-hidden">
         <aside className="w-80 bg-gray-900 border-r border-gray-800 flex flex-col z-10 shadow-2xl">
           <div className="p-5 border-b border-gray-800 bg-gray-900/50">
@@ -327,9 +442,14 @@ const App: React.FC = () => {
                 index={idx} 
                 isActive={slide.id === activeSlideId} 
                 isSelected={selectedSlideIds.includes(slide.id)}
+                isDragOver={dragOverSlideId === slide.id}
                 onClick={() => setActiveSlideId(slide.id)} 
                 onSelect={(e) => toggleSlideSelection(slide.id, e)}
                 onDelete={deleteSlide} 
+                onDragStart={handleSlideDragStart}
+                onDragOver={handleSlideDragOver}
+                onDrop={handleSlideDrop}
+                onDragEnd={handleSlideDragEnd}
               />
             ))}
             <label className="border-2 border-dashed border-gray-800 hover:border-brand-500/50 hover:bg-brand-500/5 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all gap-3 group">
@@ -349,7 +469,7 @@ const App: React.FC = () => {
             includeSubtitles={includeSubtitles}
             selectedElementId={selectedElementId}
             onSelectElement={setSelectedElementId}
-            onUpdateSlide={(updates) => activeSlideId && updateSlide(activeSlideId, updates)}
+            onUpdateSlide={(updates) => activeSlideId && updateSlide(activeSlideId, updates, { skipHistory: true })}
           />
           <EditorPanel 
             slide={activeSlide} 

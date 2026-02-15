@@ -10,6 +10,11 @@ interface SlideThumbnailProps {
   onClick: () => void;
   onSelect: (e: React.MouseEvent) => void;
   onDelete: (id: string) => void;
+  onDragStart: (slideId: string) => void;
+  onDragOver: (e: React.DragEvent, slideId: string) => void;
+  onDrop: (targetSlideId: string) => void;
+  onDragEnd: () => void;
+  isDragOver: boolean;
 }
 
 export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({ 
@@ -19,14 +24,25 @@ export const SlideThumbnail: React.FC<SlideThumbnailProps> = ({
   isSelected,
   onClick, 
   onSelect,
-  onDelete 
+  onDelete,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragOver
 }) => {
   return (
     <div 
       className={`group relative flex flex-col gap-2 p-2 rounded-lg cursor-pointer transition-all border-2 
         ${isActive ? 'border-brand-500 bg-brand-500/10' : 'border-transparent hover:bg-gray-800'}
-        ${isSelected && !isActive ? 'bg-brand-900/10 border-brand-800/50' : ''}`}
+        ${isSelected && !isActive ? 'bg-brand-900/10 border-brand-800/50' : ''}
+        ${isDragOver ? 'ring-2 ring-brand-400 bg-brand-500/20' : ''}`}
       onClick={onClick}
+      draggable
+      onDragStart={() => onDragStart(slide.id)}
+      onDragOver={(e) => onDragOver(e, slide.id)}
+      onDrop={() => onDrop(slide.id)}
+      onDragEnd={onDragEnd}
     >
       <div className="relative aspect-video w-full bg-gray-900 rounded overflow-hidden shadow-sm">
         <img src={slide.imageUrl} alt={`Slide ${index}`} className="w-full h-full object-cover" />

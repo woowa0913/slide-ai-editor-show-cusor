@@ -1,0 +1,7 @@
+{
+  "name": "Slide AI Editor show",
+  "description": "A browser-based studio to turn images into narrated videos using Gemini TTS.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

@@ -93,6 +93,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
       }
     } catch (e) {
       console.error(e);
+      alert("음성 미리보기에 실패했습니다. 로컬에서는 `vercel dev` 실행 및 `GEMINI_API_KEY` 설정이 필요합니다.");
       setIsPreviewingVoice(false);
     }
   };

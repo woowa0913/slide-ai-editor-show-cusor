@@ -176,11 +176,19 @@ const App: React.FC = () => {
   const handleBulkGenerateAudio = async () => {
     const targetIds = selectedSlideIds.length > 0 ? selectedSlideIds : (activeSlideId ? [activeSlideId] : []);
     if (targetIds.length === 0) return;
+    const eligibleSlides = targetIds
+      .map(id => slidesRef.current.find(s => s.id === id))
+      .filter((slide): slide is Slide => Boolean(slide && slide.script && !slide.script.includes("분석 중")));
+
+    if (eligibleSlides.length === 0) {
+      alert("음성 생성할 대본이 없습니다. 먼저 대본을 입력하거나 생성해 주세요.");
+      return;
+    }
 
     const { generateSpeech } = await loadGeminiService();
-    for (const id of targetIds) {
-      const targetSlide = slidesRef.current.find(s => s.id === id);
-      if (!targetSlide || !targetSlide.script || targetSlide.script.includes("분석 중")) continue;
+    let firstErrorMessage: string | null = null;
+    for (const targetSlide of eligibleSlides) {
+      const id = targetSlide.id;
 
       updateSlide(id, { isGeneratingAudio: true });
       try {
@@ -191,9 +199,19 @@ const App: React.FC = () => {
         } else {
           throw new Error("No audio");
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        if (!firstErrorMessage) {
+          firstErrorMessage = err instanceof Error ? err.message : "Unknown error";
+        }
         updateSlide(id, { isGeneratingAudio: false });
       }
+    }
+
+    if (firstErrorMessage) {
+      const localApiHint = firstErrorMessage.includes("404")
+        ? "\n\n로컬에서 실행 중이라면 `vercel dev`로 실행해야 /api/gemini 엔드포인트가 동작합니다."
+        : "";
+      alert(`음성 생성 중 오류가 발생했습니다.\n${firstErrorMessage}${localApiHint}`);
     }
   };
 

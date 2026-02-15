@@ -32,15 +32,20 @@ export const generateSlideScript = async (base64Image: string, level: ScriptLeve
 
 // Generate TTS Audio
 export const generateSpeech = async (text: string, voiceName: VoiceName): Promise<string | null> => {
+  const cleanText = text.replace(/\*/g, '').trim();
+  if (!cleanText || cleanText.includes("분석 중") || cleanText.startsWith("오류")) {
+    return null;
+  }
+
   try {
     const result = await postGemini<{ audioBase64: string | null }, { text: string; voiceName: VoiceName }>(
       'generateSpeech',
-      { text, voiceName }
+      { text: cleanText, voiceName }
     );
     return result.audioBase64;
   } catch (error) {
     console.error("Gemini TTS Error:", error);
-    return null;
+    throw error;
   }
 };
 

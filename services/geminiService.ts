@@ -59,30 +59,31 @@ export const generateSpeech = async (text: string, voiceName: VoiceName): Promis
 
 // Generate Visual Elements & Animations
 export const generateSlideAnimations = async (base64Image: string, script: string): Promise<VisualElement[]> => {
-  try {
-    const result = await postGemini<{ elements: any[] }, { base64Image: string; script: string }>(
-      'generateAnimations',
-      { base64Image, script }
-    );
-    const elements = result.elements || [];
+  const result = await postGemini<{ elements: any[] }, { base64Image: string; script: string }>(
+    'generateAnimations',
+    { base64Image, script }
+  );
+  const elements = Array.isArray(result.elements) ? result.elements : [];
 
-    return elements.map((el, idx) => ({
-      id: `el-${Date.now()}-${idx}`,
-      label: el.label,
-      // Clamp values to ensure they stay inside slide (0-100)
-      rect: {
-        x: Math.max(0, Math.min(100, el.rect.x)),
-        y: Math.max(0, Math.min(100, el.rect.y)),
-        w: Math.max(1, Math.min(100 - Math.max(0, el.rect.x), el.rect.w)),
-        h: Math.max(1, Math.min(100 - Math.max(0, el.rect.y), el.rect.h)),
-      },
-      animation: el.animation,
-      startTime: el.startTime,
-      duration: el.duration || 1.5
-    }));
-
-  } catch (error) {
-    console.error("Gemini Animation Error:", error);
-    return [];
-  }
+  return elements
+    .filter((el) => el && typeof el === 'object' && el.rect)
+    .map((el, idx) => {
+      const x = Number(el.rect.x ?? 0);
+      const y = Number(el.rect.y ?? 0);
+      const w = Number(el.rect.w ?? 20);
+      const h = Number(el.rect.h ?? 20);
+      return {
+        id: `el-${Date.now()}-${idx}`,
+        label: String(el.label || `Element ${idx + 1}`),
+        rect: {
+          x: Math.max(0, Math.min(100, x)),
+          y: Math.max(0, Math.min(100, y)),
+          w: Math.max(1, Math.min(100 - Math.max(0, x), w)),
+          h: Math.max(1, Math.min(100 - Math.max(0, y), h)),
+        },
+        animation: el.animation || 'none',
+        startTime: Number(el.startTime ?? 0),
+        duration: Number(el.duration ?? 1.5),
+      } as VisualElement;
+    });
 };

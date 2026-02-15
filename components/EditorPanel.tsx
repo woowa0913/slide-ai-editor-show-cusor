@@ -63,9 +63,16 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
       const base64Data = slide.imageUrl.split(',')[1] || slide.imageUrl;
       const elements = await generateSlideAnimations(base64Data, slide.script || "Presentation slide");
       onUpdate(slide.id, { visualElements: elements });
+      if (elements.length > 0) {
+        onSelectElement(elements[0].id);
+      } else {
+        onSelectElement(null);
+        alert("감지된 요소가 없습니다. 대본을 보강하거나 이미지 품질을 높여 다시 시도해 주세요.");
+      }
     } catch (e) {
       console.error(e);
-      alert("애니메이션 생성 실패");
+      const message = e instanceof Error ? e.message : "Unknown error";
+      alert(`애니메이션 생성 실패\n${message}`);
     } finally {
       setIsAnimGenerating(false);
     }

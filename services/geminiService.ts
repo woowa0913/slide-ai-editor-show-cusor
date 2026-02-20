@@ -6,22 +6,37 @@ const MAX_IMAGE_BYTES_FOR_REQUEST = 1_500_000;
 
 const estimateBase64Bytes = (base64: string): number => Math.ceil((base64.length * 3) / 4);
 
-const loadImageFromBase64 = (base64: string): Promise<HTMLImageElement> =>
+const parseImageInput = (input: string): { mimeType: string; base64: string } => {
+  const dataUrlMatch = input.match(/^data:([^;]+);base64,(.+)$/);
+  if (dataUrlMatch) {
+    return { mimeType: dataUrlMatch[1], base64: dataUrlMatch[2] };
+  }
+
+  if (input.startsWith('iVBOR')) return { mimeType: 'image/png', base64: input };
+  if (input.startsWith('/9j/')) return { mimeType: 'image/jpeg', base64: input };
+  if (input.startsWith('R0lGOD')) return { mimeType: 'image/gif', base64: input };
+  if (input.startsWith('UklGR')) return { mimeType: 'image/webp', base64: input };
+
+  return { mimeType: 'image/jpeg', base64: input };
+};
+
+const loadImageFromBase64 = (base64: string, mimeType: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error('Failed to load image for compression'));
-    img.src = `data:image/jpeg;base64,${base64}`;
+    img.src = `data:${mimeType};base64,${base64}`;
   });
 
-const compressImageBase64ForApi = async (base64: string): Promise<string> => {
-  if (estimateBase64Bytes(base64) <= MAX_IMAGE_BYTES_FOR_REQUEST) return base64;
+const compressImageBase64ForApi = async (imageInput: string): Promise<string> => {
+  const parsed = parseImageInput(imageInput);
+  if (estimateBase64Bytes(parsed.base64) <= MAX_IMAGE_BYTES_FOR_REQUEST) return parsed.base64;
 
   try {
-    const img = await loadImageFromBase64(base64);
+    const img = await loadImageFromBase64(parsed.base64, parsed.mimeType);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    if (!ctx) return base64;
+    if (!ctx) return parsed.base64;
 
     const maxDim = 1600;
     const imgScale = Math.min(1, maxDim / Math.max(img.width, img.height));
@@ -33,7 +48,7 @@ const compressImageBase64ForApi = async (base64: string): Promise<string> => {
       canvas.height = h;
       ctx.clearRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
-      return canvas.toDataURL('image/jpeg', quality).split(',')[1] || base64;
+      return canvas.toDataURL('image/jpeg', quality).split(',')[1] || parsed.base64;
     };
 
     const qualitySteps = [0.82, 0.72, 0.62, 0.52, 0.42];
@@ -51,9 +66,13 @@ const compressImageBase64ForApi = async (base64: string): Promise<string> => {
       best = renderAt(width, height, 0.62);
     }
 
+    if (estimateBase64Bytes(best) > MAX_IMAGE_BYTES_FOR_REQUEST) {
+      throw new Error('IMAGE_TOO_LARGE');
+    }
+
     return best;
   } catch {
-    return base64;
+    throw new Error('이미지 용량이 너무 커서 요청할 수 없습니다. 해상도를 낮춘 이미지를 사용해 주세요.');
   }
 };
 

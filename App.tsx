@@ -302,8 +302,7 @@ const App: React.FC = () => {
       if (!targetSlide) continue;
 
       try {
-        const base64Data = targetSlide.imageUrl.split(',')[1] || targetSlide.imageUrl;
-        const result = await generateSlideScript(base64Data, scriptLevel, scriptLength);
+        const result = await generateSlideScript(targetSlide.imageUrl, scriptLevel, scriptLength);
         updateSlide(id, { script: result.script, subtitle: result.subtitle }, { skipHistory: true });
       } catch (err) {
         updateSlide(id, { script: "오류: 분석에 실패했습니다." }, { skipHistory: true });

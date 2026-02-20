@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Slide, VoiceName, GenerationState, ScriptLevel, ScriptLength, AspectRatio, SubtitleStyle } from './types';
+import { Slide, VoiceName, GenerationState, ScriptLevel, ScriptLength, AspectRatio, SubtitleStyle, VisualElement } from './types';
 import { SAMPLE_SLIDES, PLACEHOLDER_IMAGE } from './constants';
 import { SlideThumbnail } from './components/SlideThumbnail';
 import { PreviewArea } from './components/PreviewArea';
@@ -38,6 +38,7 @@ const App: React.FC = () => {
 
   // New State for Animation Selection
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [editorTab, setEditorTab] = useState<'subtitle' | 'animation'>('subtitle');
 
   const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>({
     fontSize: 32,
@@ -265,6 +266,25 @@ const App: React.FC = () => {
   const handleSlideDragEnd = () => {
     setDraggingSlideId(null);
     setDragOverSlideId(null);
+  };
+
+  const handleAddVisualElement = (rect: { x: number, y: number, w: number, h: number }) => {
+    if (!activeSlideId) return;
+    const newElement: VisualElement = {
+      id: crypto.randomUUID(),
+      label: `New Element`,
+      rect,
+      animation: 'fadeIn',
+      startTime: 0,
+      duration: 2
+    };
+    const currentSlide = slidesRef.current.find(s => s.id === activeSlideId);
+    if (!currentSlide) return;
+
+    updateSlide(activeSlideId, {
+      visualElements: [...(currentSlide.visualElements || []), newElement]
+    });
+    setSelectedElementId(newElement.id);
   };
 
   // Bulk Script Generation
@@ -499,6 +519,8 @@ const App: React.FC = () => {
             onUpdate={updateSlide}
             onGenerateAudio={handleBulkGenerateAudio}
             onGenerateScript={handleBulkGenerateScript}
+            activeTab={editorTab}
+            onTabChange={setEditorTab}
             subtitleStyle={subtitleStyle}
             onUpdateSubtitleStyle={setSubtitleStyle}
             selectedVoice={selectedVoice}

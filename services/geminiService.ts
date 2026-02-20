@@ -2,6 +2,60 @@
 import { VoiceName, ScriptLevel, ScriptLength, VisualElement } from '../types';
 
 type GeminiAction = 'generateScript' | 'generateSpeech' | 'generateAnimations';
+const MAX_IMAGE_BYTES_FOR_REQUEST = 1_500_000;
+
+const estimateBase64Bytes = (base64: string): number => Math.ceil((base64.length * 3) / 4);
+
+const loadImageFromBase64 = (base64: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Failed to load image for compression'));
+    img.src = `data:image/jpeg;base64,${base64}`;
+  });
+
+const compressImageBase64ForApi = async (base64: string): Promise<string> => {
+  if (estimateBase64Bytes(base64) <= MAX_IMAGE_BYTES_FOR_REQUEST) return base64;
+
+  try {
+    const img = await loadImageFromBase64(base64);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return base64;
+
+    const maxDim = 1600;
+    const imgScale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    let width = Math.max(1, Math.floor(img.width * imgScale));
+    let height = Math.max(1, Math.floor(img.height * imgScale));
+
+    const renderAt = (w: number, h: number, quality: number): string => {
+      canvas.width = w;
+      canvas.height = h;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      return canvas.toDataURL('image/jpeg', quality).split(',')[1] || base64;
+    };
+
+    const qualitySteps = [0.82, 0.72, 0.62, 0.52, 0.42];
+    let best = renderAt(width, height, qualitySteps[0]);
+    for (const q of qualitySteps) {
+      const candidate = renderAt(width, height, q);
+      best = candidate;
+      if (estimateBase64Bytes(candidate) <= MAX_IMAGE_BYTES_FOR_REQUEST) return candidate;
+    }
+
+    // If quality reduction alone is not enough, continue scaling down.
+    while (estimateBase64Bytes(best) > MAX_IMAGE_BYTES_FOR_REQUEST && width > 480 && height > 270) {
+      width = Math.max(480, Math.floor(width * 0.8));
+      height = Math.max(270, Math.floor(height * 0.8));
+      best = renderAt(width, height, 0.62);
+    }
+
+    return best;
+  } catch {
+    return base64;
+  }
+};
 
 const postGemini = async <TResponse, TPayload>(action: GeminiAction, payload: TPayload): Promise<TResponse> => {
   const response = await fetch('/api/gemini', {
@@ -25,6 +79,9 @@ const postGemini = async <TResponse, TPayload>(action: GeminiAction, payload: TP
       const retryText = retryAfterSec ? ` (약 ${retryAfterSec}초 후 재시도)` : '';
       message = `[${code}] ${message}${retryText}`;
     }
+    if (response.status === 413) {
+      message = '이미지 용량이 커서 요청이 거부되었습니다. 이미지 해상도를 낮추거나 슬라이드를 다시 업로드해 주세요.';
+    }
     throw new Error(message);
   }
   return await response.json() as TResponse;
@@ -32,9 +89,10 @@ const postGemini = async <TResponse, TPayload>(action: GeminiAction, payload: TP
 
 // Generate Script for an Image
 export const generateSlideScript = async (base64Image: string, level: ScriptLevel, length: ScriptLength, context?: string): Promise<{script: string, subtitle: string}> => {
+  const optimizedImage = await compressImageBase64ForApi(base64Image);
   return postGemini<{ script: string; subtitle: string }, { base64Image: string; level: ScriptLevel; length: ScriptLength; context?: string }>(
     'generateScript',
-    { base64Image, level, length, context }
+    { base64Image: optimizedImage, level, length, context }
   );
 };
 
@@ -59,9 +117,11 @@ export const generateSpeech = async (text: string, voiceName: VoiceName): Promis
 
 // Generate Visual Elements & Animations
 export const generateSlideAnimations = async (base64Image: string, script: string): Promise<VisualElement[]> => {
+  const optimizedImage = await compressImageBase64ForApi(base64Image);
+  const shortenedScript = script.length > 2000 ? script.slice(0, 2000) : script;
   const result = await postGemini<{ elements: any[] }, { base64Image: string; script: string }>(
     'generateAnimations',
-    { base64Image, script }
+    { base64Image: optimizedImage, script: shortenedScript }
   );
   const elements = Array.isArray(result.elements) ? result.elements : [];
 

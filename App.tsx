@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [draggingSlideId, setDraggingSlideId] = useState<string | null>(null);
   const [dragOverSlideId, setDragOverSlideId] = useState<string | null>(null);
   const isRestoringHistoryRef = useRef(false);
+  const hasAutoLoadedPdfRef = useRef(false);
 
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -131,6 +132,58 @@ const App: React.FC = () => {
   useEffect(() => {
     setSelectedElementId(null);
   }, [activeSlideId]);
+
+  // Auto-import PDF when launched with ?pdf_url=... (NotebookLM/link handoff)
+  useEffect(() => {
+    if (hasAutoLoadedPdfRef.current) return;
+    hasAutoLoadedPdfRef.current = true;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const pdfUrl = urlParams.get('pdf_url');
+    if (!pdfUrl) return;
+
+    const loadPdfFromUrl = async () => {
+      setGenerationState({ isExporting: true, progress: 0, statusMessage: '공유된 PDF 다운로드 중...' });
+      try {
+        const response = await fetch(pdfUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch PDF (${response.status})`);
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('pdf')) {
+          // Some providers may not set it exactly, but this catches obvious non-PDF links.
+          console.warn('Unexpected content-type for pdf_url:', contentType);
+        }
+
+        const blob = await response.blob();
+        const file = new File([blob], 'shared-notebook.pdf', { type: 'application/pdf' });
+        const { convertPdfToImages } = await loadPdfUtils();
+        const images = await convertPdfToImages(file);
+
+        const newSlides: Slide[] = images.map((imgUrl) => ({
+          id: crypto.randomUUID(),
+          imageUrl: imgUrl,
+          script: '',
+          subtitle: '',
+          audioData: null,
+          isGeneratingAudio: false,
+          visualElements: []
+        }));
+
+        setSlides(newSlides);
+        setSelectedSlideIds([]);
+        if (newSlides.length > 0) setActiveSlideId(newSlides[0].id);
+      } catch (error) {
+        console.error('PDF import from pdf_url failed:', error);
+        alert('공유된 PDF를 불러오지 못했습니다. 링크 접근 권한/CORS 또는 URL을 확인해 주세요.');
+      } finally {
+        setGenerationState({ isExporting: false, progress: 0, statusMessage: '' });
+      }
+    };
+
+    loadPdfFromUrl();
+  }, []);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
